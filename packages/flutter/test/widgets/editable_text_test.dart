@@ -13106,8 +13106,8 @@ void main() {
   testWidgets('overrides of vertical caret movement actions can call their callingAction', (
     WidgetTester tester,
   ) async {
-    controller.text = 'line one\nline two\nline three';
-    controller.selection = const TextSelection.collapsed(offset: 13); // 'line two', col 4.
+    controller.text = 'line one long\nab\nline three long';
+    controller.selection = const TextSelection.collapsed(offset: 10); // 'line one long', col 10.
     final invokedIntents = <Intent>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -13132,13 +13132,17 @@ void main() {
     );
     await tester.pump(); // Wait for autofocus to take effect.
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();
-    expect(controller.selection, const TextSelection.collapsed(offset: 4));
+    expect(controller.selection.isCollapsed, isTrue);
+    expect(controller.selection.baseOffset, 16); // End of 'ab'.
 
+    // Page Down continues the run that Down started, so the caret returns to
+    // column 10 of 'line three long' instead of staying at the column of the
+    // short line.
     await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
     await tester.pump();
-    expect(controller.selection, const TextSelection.collapsed(offset: 22)); // 'line three', col 4.
+    expect(controller.selection, const TextSelection.collapsed(offset: 27));
 
     expect(invokedIntents, <Matcher>[
       isA<ExtendSelectionVerticallyToAdjacentLineIntent>(),
