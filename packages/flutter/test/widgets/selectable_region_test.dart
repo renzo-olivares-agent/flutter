@@ -3824,6 +3824,39 @@ void main() {
     );
 
     testWidgets(
+      'vertical arrow keys move the caret of a focused multiline TextField',
+      (WidgetTester tester) async {
+        final controller = TextEditingController(text: 'line one\nline two\nline three');
+        addTearDown(controller.dispose);
+        final textFieldFocus = FocusNode();
+        addTearDown(textFieldFocus.dispose);
+
+        await tester.pumpWidget(
+          TestWidgetsApp(
+            home: _selectableRegion(
+              child: TestTextField(controller: controller, focusNode: textFieldFocus, maxLines: 5),
+            ),
+          ),
+        );
+        textFieldFocus.requestFocus();
+        await tester.pump();
+        controller.selection = const TextSelection.collapsed(offset: 13); // 'line two', col 4.
+        await tester.pump();
+
+        await sendKeyCombination(tester, const SingleActivator(LogicalKeyboardKey.arrowUp));
+        expect(controller.selection, const TextSelection.collapsed(offset: 4));
+
+        await sendKeyCombination(tester, const SingleActivator(LogicalKeyboardKey.arrowDown));
+        expect(controller.selection, const TextSelection.collapsed(offset: 13));
+
+        await sendKeyCombination(tester, const SingleActivator(LogicalKeyboardKey.arrowDown));
+        expect(controller.selection, const TextSelection.collapsed(offset: 22));
+      },
+      variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended] the web handles this on its own.
+    );
+
+    testWidgets(
       'select all',
       (WidgetTester tester) async {
         final focusNode = FocusNode();

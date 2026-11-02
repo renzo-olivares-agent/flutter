@@ -13103,6 +13103,51 @@ void main() {
     // On web, using keyboard for selection is handled by the browser.
   }, skip: kIsWeb); // [intended]
 
+  testWidgets('overrides of vertical caret movement actions can call their callingAction', (
+    WidgetTester tester,
+  ) async {
+    controller.text = 'line one\nline two\nline three';
+    controller.selection = const TextSelection.collapsed(offset: 13); // 'line two', col 4.
+    final invokedIntents = <Intent>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Actions(
+          actions: <Type, Action<Intent>>{
+            ExtendSelectionVerticallyToAdjacentLineIntent:
+                _InvokeCallingAction<ExtendSelectionVerticallyToAdjacentLineIntent>(invokedIntents),
+            ExtendSelectionVerticallyToAdjacentPageIntent:
+                _InvokeCallingAction<ExtendSelectionVerticallyToAdjacentPageIntent>(invokedIntents),
+          },
+          child: EditableText(
+            maxLines: 10,
+            controller: controller,
+            autofocus: true,
+            focusNode: focusNode,
+            style: Typography.material2018().black.titleMedium!,
+            cursorColor: Colors.blue,
+            backgroundCursorColor: Colors.grey,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(); // Wait for autofocus to take effect.
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(controller.selection, const TextSelection.collapsed(offset: 4));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+    await tester.pump();
+    expect(controller.selection, const TextSelection.collapsed(offset: 22)); // 'line three', col 4.
+
+    expect(invokedIntents, <Matcher>[
+      isA<ExtendSelectionVerticallyToAdjacentLineIntent>(),
+      isA<ExtendSelectionVerticallyToAdjacentPageIntent>(),
+    ]);
+
+    // On web, using keyboard for selection is handled by the browser.
+  }, skip: kIsWeb); // [intended]
+
   testWidgets('can change tap outside behavior by overriding actions', (WidgetTester tester) async {
     var myIntentWasCalled = false;
     final overrideAction = CallbackAction<EditableTextTapOutsideIntent>(
@@ -19545,5 +19590,18 @@ class _EditableTextStatefulMenuState extends State<_EditableTextStatefulMenu> {
       'Initial: $initialValue, Current: ${widget.value}',
       textDirection: TextDirection.ltr,
     );
+  }
+}
+
+/// Records each intent, then invokes the action it overrides.
+class _InvokeCallingAction<T extends Intent> extends Action<T> {
+  _InvokeCallingAction(this.invokedIntents);
+
+  final List<Intent> invokedIntents;
+
+  @override
+  Object? invoke(T intent) {
+    invokedIntents.add(intent);
+    return callingAction?.invoke(intent);
   }
 }
