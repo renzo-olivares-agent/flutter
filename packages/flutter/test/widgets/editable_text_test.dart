@@ -13110,7 +13110,7 @@ void main() {
     controller.selection = const TextSelection.collapsed(offset: 10); // 'line one long', col 10.
     final invokedIntents = <Intent>[];
     await tester.pumpWidget(
-      MaterialApp(
+      TestWidgetsApp(
         home: Actions(
           actions: <Type, Action<Intent>>{
             ExtendSelectionVerticallyToAdjacentLineIntent:
@@ -13123,9 +13123,9 @@ void main() {
             controller: controller,
             autofocus: true,
             focusNode: focusNode,
-            style: Typography.material2018().black.titleMedium!,
-            cursorColor: Colors.blue,
-            backgroundCursorColor: Colors.grey,
+            style: const TextStyle(fontSize: 16),
+            cursorColor: const Color(0xFF2196F3),
+            backgroundCursorColor: const Color(0xFF9E9E9E),
           ),
         ),
       ),
