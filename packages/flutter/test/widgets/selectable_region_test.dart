@@ -3851,8 +3851,62 @@ void main() {
 
         await sendKeyCombination(tester, const SingleActivator(LogicalKeyboardKey.arrowDown));
         expect(controller.selection, const TextSelection.collapsed(offset: 22));
+
+        // Shift+Up and Shift+Down extend the selection through the same action.
+        await sendKeyCombination(
+          tester,
+          const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true),
+        );
+        expect(controller.selection, const TextSelection(baseOffset: 22, extentOffset: 13));
+
+        await sendKeyCombination(
+          tester,
+          const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true),
+        );
+        expect(controller.selection, const TextSelection.collapsed(offset: 22));
       },
       variant: TargetPlatformVariant.all(),
+      skip: kIsWeb, // [intended] the web handles this on its own.
+    );
+
+    testWidgets(
+      'vertical caret selectors move the caret of a focused multiline TextField',
+      (WidgetTester tester) async {
+        final controller = TextEditingController(text: 'line one\nline two\nline three');
+        addTearDown(controller.dispose);
+        final textFieldFocus = FocusNode();
+        addTearDown(textFieldFocus.dispose);
+
+        await tester.pumpWidget(
+          TestWidgetsApp(
+            home: _selectableRegion(
+              child: TestTextField(controller: controller, focusNode: textFieldFocus, maxLines: 5),
+            ),
+          ),
+        );
+        textFieldFocus.requestFocus();
+        await tester.pump();
+        controller.selection = const TextSelection.collapsed(offset: 13); // 'line two', col 4.
+        await tester.pump();
+        final EditableTextState state = tester.state<EditableTextState>(find.byType(EditableText));
+
+        state.performSelector('moveUp:');
+        await tester.pump();
+        expect(controller.selection, const TextSelection.collapsed(offset: 4));
+
+        state.performSelector('moveDown:');
+        await tester.pump();
+        expect(controller.selection, const TextSelection.collapsed(offset: 13));
+
+        state.performSelector('moveDownAndModifySelection:');
+        await tester.pump();
+        expect(controller.selection, const TextSelection(baseOffset: 13, extentOffset: 22));
+
+        state.performSelector('moveUpAndModifySelection:');
+        await tester.pump();
+        expect(controller.selection, const TextSelection.collapsed(offset: 13));
+      },
+      variant: const TargetPlatformVariant(<TargetPlatform>{TargetPlatform.macOS}),
       skip: kIsWeb, // [intended] the web handles this on its own.
     );
 
