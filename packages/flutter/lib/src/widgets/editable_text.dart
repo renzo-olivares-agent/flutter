@@ -4983,7 +4983,7 @@ class EditableTextState extends State<EditableText>
     setState(() {
       /* We use widget.controller.value in build(). */
     });
-    _verticalSelectionUpdateAction.stopCurrentVerticalRunIfSelectionChanges();
+    _stopCurrentVerticalRunIfSelectionChanges();
   }
 
   void _handleFocusChanged() {
@@ -5695,9 +5695,29 @@ class EditableTextState extends State<EditableText>
   late final Action<UpdateSelectionIntent> _updateSelectionAction =
       CallbackAction<UpdateSelectionIntent>(onInvoke: _updateSelection);
 
-  late final _UpdateTextSelectionVerticallyAction<DirectionalCaretMovementIntent>
-  _verticalSelectionUpdateAction =
-      _UpdateTextSelectionVerticallyAction<DirectionalCaretMovementIntent>(this);
+  // The vertical caret movement run in progress. Line and page moves share it,
+  // so the caret keeps its horizontal position when the two are mixed.
+  VerticalCaretMovementRun? _verticalMovementRun;
+  TextSelection? _verticalRunSelection;
+
+  void _stopCurrentVerticalRunIfSelectionChanges() {
+    final TextSelection? runSelection = _verticalRunSelection;
+    if (runSelection == null) {
+      assert(_verticalMovementRun == null);
+      return;
+    }
+    _verticalRunSelection = _value.selection;
+    final TextSelection currentSelection = widget.controller.selection;
+    final bool continueCurrentRun =
+        currentSelection.isValid &&
+        currentSelection.isCollapsed &&
+        currentSelection.baseOffset == runSelection.baseOffset &&
+        currentSelection.extentOffset == runSelection.extentOffset;
+    if (!continueCurrentRun) {
+      _verticalMovementRun = null;
+      _verticalRunSelection = null;
+    }
+  }
 
   Object? _hideToolbarIfVisible(DismissIntent intent) {
     if (_selectionOverlay?.toolbarIsVisible ?? false) {
@@ -5807,8 +5827,12 @@ class EditableTextState extends State<EditableText>
         ignoreNonCollapsedSelection: true,
       ),
     ),
-    ExtendSelectionVerticallyToAdjacentLineIntent: _makeOverridable(_verticalSelectionUpdateAction),
-    ExtendSelectionVerticallyToAdjacentPageIntent: _makeOverridable(_verticalSelectionUpdateAction),
+    ExtendSelectionVerticallyToAdjacentLineIntent: _makeOverridable(
+      _UpdateTextSelectionVerticallyAction<ExtendSelectionVerticallyToAdjacentLineIntent>(this),
+    ),
+    ExtendSelectionVerticallyToAdjacentPageIntent: _makeOverridable(
+      _UpdateTextSelectionVerticallyAction<ExtendSelectionVerticallyToAdjacentPageIntent>(this),
+    ),
     ExtendSelectionToNextParagraphBoundaryOrCaretLocationIntent: _makeOverridable(
       _UpdateTextSelectionAction<ExtendSelectionToNextParagraphBoundaryOrCaretLocationIntent>(
         this,
@@ -6767,28 +6791,6 @@ class _UpdateTextSelectionVerticallyAction<T extends DirectionalCaretMovementInt
 
   final EditableTextState state;
 
-  VerticalCaretMovementRun? _verticalMovementRun;
-  TextSelection? _runSelection;
-
-  void stopCurrentVerticalRunIfSelectionChanges() {
-    final TextSelection? runSelection = _runSelection;
-    if (runSelection == null) {
-      assert(_verticalMovementRun == null);
-      return;
-    }
-    _runSelection = state._value.selection;
-    final TextSelection currentSelection = state.widget.controller.selection;
-    final bool continueCurrentRun =
-        currentSelection.isValid &&
-        currentSelection.isCollapsed &&
-        currentSelection.baseOffset == runSelection.baseOffset &&
-        currentSelection.extentOffset == runSelection.extentOffset;
-    if (!continueCurrentRun) {
-      _verticalMovementRun = null;
-      _runSelection = null;
-    }
-  }
-
   @override
   void invoke(T intent, [BuildContext? context]) {
     assert(state._value.selection.isValid);
@@ -6799,13 +6801,13 @@ class _UpdateTextSelectionVerticallyAction<T extends DirectionalCaretMovementInt
       return;
     }
 
-    if (_verticalMovementRun?.isValid == false) {
-      _verticalMovementRun = null;
-      _runSelection = null;
+    if (state._verticalMovementRun?.isValid == false) {
+      state._verticalMovementRun = null;
+      state._verticalRunSelection = null;
     }
 
     final VerticalCaretMovementRun currentRun =
-        _verticalMovementRun ??
+        state._verticalMovementRun ??
         state.renderEditable.startVerticalCaretMovement(state.renderEditable.selection!.extent);
 
     final bool shouldMove = intent is ExtendSelectionVerticallyToAdjacentPageIntent
@@ -6827,8 +6829,8 @@ class _UpdateTextSelectionVerticallyAction<T extends DirectionalCaretMovementInt
       UpdateSelectionIntent(value, newSelection, SelectionChangedCause.keyboard),
     );
     if (state._value.selection == newSelection) {
-      _verticalMovementRun = currentRun;
-      _runSelection = newSelection;
+      state._verticalMovementRun = currentRun;
+      state._verticalRunSelection = newSelection;
     }
   }
 

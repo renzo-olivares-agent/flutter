@@ -13103,6 +13103,55 @@ void main() {
     // On web, using keyboard for selection is handled by the browser.
   }, skip: kIsWeb); // [intended]
 
+  testWidgets('overrides of vertical caret movement actions can call their callingAction', (
+    WidgetTester tester,
+  ) async {
+    controller.text = 'line one long\nab\nline three long';
+    controller.selection = const TextSelection.collapsed(offset: 10); // 'line one long', col 10.
+    final invokedIntents = <Intent>[];
+    await tester.pumpWidget(
+      TestWidgetsApp(
+        home: Actions(
+          actions: <Type, Action<Intent>>{
+            ExtendSelectionVerticallyToAdjacentLineIntent:
+                _InvokeCallingAction<ExtendSelectionVerticallyToAdjacentLineIntent>(invokedIntents),
+            ExtendSelectionVerticallyToAdjacentPageIntent:
+                _InvokeCallingAction<ExtendSelectionVerticallyToAdjacentPageIntent>(invokedIntents),
+          },
+          child: EditableText(
+            maxLines: 10,
+            controller: controller,
+            autofocus: true,
+            focusNode: focusNode,
+            style: const TextStyle(fontSize: 16),
+            cursorColor: const Color(0xFF2196F3),
+            backgroundCursorColor: const Color(0xFF9E9E9E),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(); // Wait for autofocus to take effect.
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(controller.selection.isCollapsed, isTrue);
+    expect(controller.selection.baseOffset, 16); // End of 'ab'.
+
+    // Page Down continues the run that Down started, so the caret returns to
+    // column 10 of 'line three long' instead of staying at the column of the
+    // short line.
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+    await tester.pump();
+    expect(controller.selection, const TextSelection.collapsed(offset: 27));
+
+    expect(invokedIntents, <Matcher>[
+      isA<ExtendSelectionVerticallyToAdjacentLineIntent>(),
+      isA<ExtendSelectionVerticallyToAdjacentPageIntent>(),
+    ]);
+
+    // On web, using keyboard for selection is handled by the browser.
+  }, skip: kIsWeb); // [intended]
+
   testWidgets('can change tap outside behavior by overriding actions', (WidgetTester tester) async {
     var myIntentWasCalled = false;
     final overrideAction = CallbackAction<EditableTextTapOutsideIntent>(
@@ -19545,5 +19594,18 @@ class _EditableTextStatefulMenuState extends State<_EditableTextStatefulMenu> {
       'Initial: $initialValue, Current: ${widget.value}',
       textDirection: TextDirection.ltr,
     );
+  }
+}
+
+/// Records each intent, then invokes the action it overrides.
+class _InvokeCallingAction<T extends Intent> extends Action<T> {
+  _InvokeCallingAction(this.invokedIntents);
+
+  final List<Intent> invokedIntents;
+
+  @override
+  Object? invoke(T intent) {
+    invokedIntents.add(intent);
+    return callingAction?.invoke(intent);
   }
 }
